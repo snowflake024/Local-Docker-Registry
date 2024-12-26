@@ -179,7 +179,7 @@ client_max_body_size 2G;
 
 3. Save and close the file.
    
-### Step 5: Configure/Generate SSL Certificate and Basic Authentication
+### Step 4: Configure/Generate SSL Certificate and Basic Authentication
 
 Note: You can have a self-signed certificate for the registry or have a CA sign a valid public certificate.
 
@@ -273,7 +273,7 @@ htpasswd -Bc registry.passwd [username]
 5. Type in a strong password and re-type it to confirm. The output confirms the success of the operation.
 Requesting a password for a user with htpasswd.
 
-### Step 6: Add Root CA Certificate to the system store (if it's self signed)
+### Step 5: Add Root CA Certificate to the system store (if it's self signed)
 
 1. Copy the ca certifiacate over to the store and run the system utility to include the CA in the OS CA bundle
 ```
@@ -287,7 +287,7 @@ openssl verify -CAfile /etc/ssl/certs/ca-bundle.crt /path/to/cert/ca.crt
 ```
 If the output is anything different from OK then further troubleshooting should ensue or steps should be repeated.
 
-### Step 7: Add certificate to docker (Optional)
+### Step 6: Add certificate to docker (Optional)
 Add the Root CA certificate to Docker and the host system by following the procedure below:
 
 1. Create a directory for Docker certificates:
@@ -305,7 +305,7 @@ cp /path/to/cert/ca.crt /etc/docker/certs.d/[domain]
 systemctl restart docker
 ```
 
-Step 7: Run Docker Registry
+### Step 7: Run Docker Registry
 
 With everything set up and ready, build the Docker Registry and Nginx containers using Docker Compose:
 
@@ -329,42 +329,28 @@ How to Push Docker Image to Private Registry
 1. To push an image from a Docker host to the private Docker registry server, log in to the registry with the following command:
 
 ```bash
-docker login https://registry.[domain]/v2/
+docker login https://[domain]/v2/
 ```
 
-For example, to access the registry at example.com, type:
+2. Type in the username and password created in Step 4 to login in to a private Docker registry.
 
+3. Pull Image from Docker Hub to local registry
+```
+docker pull nginx
+```
+
+4. Re-tag the image for be pushed to the local registry
+```
+docker tag nginx:latest ctreg.big-brain.local/nginx:latest
+```
+
+5. Push the image to the private registry with the command:
 ```bash
-docker login https://registry.example.com/v2/
+docker push [domain]/[new-image-name]
 ```
 
-2. Type in the username and password created in Step 5.
-Logging in to a private Docker registry.
-
-3. Push the image to the private registry with the command:
-
-```bash
-docker push registry.[domain]/[new-image-name]
-```
-
-Pull Image from Docker Hub to Private Registry
-
-1. To locally store an image from Docker Hub to a private registry, use the docker pull command:
-
-```bash
-docker pull [image]
-```
-
-2. Add a tag to the image to label it for the private registry:
-
-```bash
-docker image tag [image] registry.[domain]/[new-image-name]
-```
-
-3. Check whether the Docker image is locally available by prompting the system to list all locally stored images:
+6. Check whether the Docker image is locally available by prompting the system to list all locally stored images:
 
 ```bash
 docker images
 ```
-
-Conclusion

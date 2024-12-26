@@ -1,28 +1,18 @@
-```bash
-How to set up private Docker registry on Ubuntu.
-
-Prerequisites
-
-    Command-line access.
-    Administrative privileges on the system.
-    Docker and Docker Compose installed.
-    Nginx installed.
-
-What Is Private Docker Registry
+# How to set up this private Docker registry.
 
 Private registries contain proprietary or otherwise sensitive container images not intended for public distribution. By requiring authentication, these registries restrict who can pull and push images, creating a more secure development environment. By running locally, private registries also speed up app development and save bandwidth.
 
-#Install and Configure Private Docker Registry
+## Install and Configure Private Docker Registry
 
 Setting up a server to host a private Docker registry requires running a registry service, configuring an Nginx web server, and generating the necessary security certificates. Follow the steps below to install a private Docker registry on a server.
-Step 1: Create Registry Directories
+### Step 1: Create Registry Directories
 
-Create a new project directory to store all the required configuration files. The following steps show how to create a proper directory structure:
+Create a new project directory to store all the required configuration files. 
 
 1. Use the following mkdir command to create a new project directory labeled registry and two sub-directories, nginx and auth:
 
 ```bash
-mkdir -p registry/{nginx,auth}
+mkdir -p /registry/{nginx,auth}
 ```
 
 2. Create two new directories, conf.d and ssl, inside the nginx directory:
@@ -35,20 +25,38 @@ mkdir -p registry/nginx/{conf.d,ssl}
 
 ```bash
 cd registry && tree
+
+.
+├── README.md
+├── auth
+│   └── registry.passwd
+├── cert
+│   ├── ca_reg.
+│   ├── ca_reg.crt
+│   ├── ca_reg.key
+│   ├── ca_reg.srl
+│   ├── ctreg.big-brain.local.crt
+│   ├── ctreg.big-brain.local.csr
+│   ├── ctreg.big-brain.local.key
+│   └── v3.ext
+├── docker-compose.yaml
+└── nginx
+    ├── conf.d
+    │   ├── additional.conf
+    │   └── registry.conf
+    └── ssl
+        ├── fullchain.pem
+        └── privkey.pem
 ```
 
-Note: If you do not have the tree tool, install it with sudo apt install tree.
-
 The output shows the final structure of the registry project directory.
-Inspecting the project directory hierarchy with the tree command.
-Step 2: Create Docker Compose Manifest and Define Services
 
-Create a new compose.yaml manifest for Docker Compose. The manifest defines the Docker Compose version and the services necessary to set up a private registry. The following steps explain how to configure the compose.yaml file:
+### Step 2: Create Docker Compose Manifest and Define Services
 
-1. Use a text editor to create a new file in the registry directory. This tutorial uses Nano.
+1. Create a new compose.yaml manifest for Docker Compose.
 
 ```bash
-nano compose.yaml
+vim docker-compose.yaml
 ```
 
 2. Paste the following content into the file:
@@ -70,7 +78,7 @@ services:
       - registrydata:/data
       - ./auth:/auth
     networks:
-      - mynet
+      - registrynet
   nginx:
     image: nginx:alpine
     container_name: nginx
@@ -83,39 +91,27 @@ services:
       - ./nginx/conf.d/:/etc/nginx/conf.d/
       - ./nginx/ssl/:/etc/nginx/ssl/
     networks:
-      - mynet
+      - registrynet
 networks:
-  mynet:
+  registrynet:
     driver: bridge
 volumes:
   registrydata:
     driver: local
 ```
 
-The first service defined in the manifest is the registry service. The service definition includes the following data:
-
-    Since Docker Registry is a container running the registry image, the image is defined as registry:2.
-    Adding the restart: always line ensures the Docker registry service starts when the system boots up.
-    Setting the ports value to 5000:5000 tells Docker that port 5000 inside the running container maps to port 5000 on the host operating system.
-    The service mounts the docker volume registrydata and the local auth directory, along with the registry.passwd authentication file.
-
-Defining the registry service in a Docker Compose manifest.
-
-The other service runs an Nginx web server. The configuration sets the service to run on ports 80:80 (HTTPS) and 443:443 (HTTPS). It mounts the local directories for virtual configuration (conf.d) and SSL certificates (ssl).
-Defining the nginx service in a Docker Compose manifest.
-
-Finally, the manifest defines Docker networks and volumes used by the registry. The mynet network runs with the bridge driver, while the registrydata volume uses the local driver.
-Defining the custom network for docker registry.
+The first service defined in the manifest is the registry service. The other service runs an Nginx web server. The configuration sets the service to run on ports 80:80 (HTTPS) and 443:443 (HTTPS). It mounts the local directories for virtual configuration (conf.d) and SSL certificates (ssl). Finally, the manifest defines Docker networks and volumes used by the registry. The registrynet network runs with the bridge driver, while the registrydata volume uses the local driver.
 
 3. Save and close the file.
-Step 3: Set up Nginx Port Forwarding
 
-Follow the procedure below to configure a Nginx virtual host by defining server parameters in a configuration file.
+### Step 3: Set up Nginx Port Forwarding
 
-1. Create a new virtual host file named registry.conf in the nginx/conf.d directory:
+Follow the procedure below to configure a Nginx server block by defining the needed parameters in a configuration file.
+
+1. Create a new server block configuration file named registry.conf in the nginx/conf.d directory:
 
 ```bash
-nano nginx/conf.d/registry.conf
+vim  nginx/conf.d/registry.conf
 ```
 
 2. Add the following content, replacing [domain] with the registry's domain address, e.g., example.com:
@@ -127,8 +123,8 @@ upstream docker-registry {
 
 server {
     listen 80;
-    server_name registry.[domain];
-    return 301 https://registry.[domain]$request_uri;
+    server_name [domain];
+    return 301 https://[domain]$request_uri;
 }
 
 server {
@@ -172,7 +168,7 @@ By default, Nginx limits the file upload size to 1MB. As many Docker images exce
 1. Create an additional Nginx configuration file by typing:
 
 ```bash
-nano nginx/conf.d/additional.conf
+vim  nginx/conf.d/additional.conf
 ```
 
 2. Add the following line in the file:
@@ -182,22 +178,82 @@ client_max_body_size 2G;
 ```
 
 3. Save and close the file.
-Step 5: Configure SSL Certificate and Basic Authentication
+   
+### Step 5: Configure/Generate SSL Certificate and Basic Authentication
 
-Note: If you do not have a certificate yet, check out how to generate an OpenSSL certificate signing request.
+Note: You can have a self-signed certificate for the registry or have a CA sign a valid public certificate.
+
+#### Generate a Certificate Authority Certificate
+
+In a production environment, you should obtain a certificate from a CA. In a test or development environment, you can generate your own CA. To generate a CA certficate, run the following commands.
+
+Generate a CA certificate private key.
+```
+openssl genrsa -out ca.key 4096
+```
+
+Generate the CA certificate. Adapt the values in the -subj option to reflect your organization. If you use an FQDN to connect your local registry, you must specify it as the common name (CN) attribute.
+```
+openssl req -x509 -new -nodes -sha512 -days 3650 \
+    -subj "/C=CN/ST=Beijing/L=Beijing/O=example/OU=Personal/CN=MyPersonal Root CA" \
+    -key ca.key \
+    -out ca.crt
+```
+
+Generate a Server Certificate. The certificate usually contains a .crt file and a .key file, for example, yourdomain.com.crt and yourdomain.com.key.
+
+Generate a private key.
+```
+openssl genrsa -out yourdomain.com.key 4096
+```
+
+Generate a certificate signing request (CSR). Adapt the values in the -subj option to reflect your organization. If you use an FQDN to connect your local registry host, you must specify it as the common name (CN) attribute and use it in the key and CSR filenames.
+```
+openssl req -sha512 -new \
+    -subj "/C=CN/ST=Beijing/L=Beijing/O=example/OU=Personal/CN=yourdomain.com" \
+    -key yourdomain.com.key \
+    -out yourdomain.com.csr
+```
+    
+Generate an x509 v3 extension file. Regardless of whether you’re using either an FQDN or an IP address to connect to your local registry host, you must create this file so that you can generate a certificate for your Harbor host that complies with the Subject Alternative Name (SAN) and x509 v3 extension requirements. Replace the DNS entries to reflect your domain.
+```
+cat > v3.ext <<-EOF
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1=yourdomain.com
+DNS.2=yourdomain
+DNS.3=hostname
+EOF
+```
+
+Use the v3.ext file to generate a certificate for your local registry host.
+
+Replace the yourdomain.com in the CSR and CRT file names with the local registry host name.
+```
+openssl x509 -req -sha512 -days 3650 \
+    -extfile v3.ext \
+    -CA ca.crt -CAkey ca.key -CAcreateserial \
+    -in yourdomain.com.csr \
+    -out yourdomain.com.crt
+```
 
 Proceed with the below steps to copy the domain's SSL certificates to the ssl directory in the project:
 
 1. Use the cp command to copy the fullchain.pem file:
 
 ```bash
-cp [path-to-file]/fullchain.pem nginx/ssl/
+cp /registry/cert/yourdomain.com.crt nginx/ssl/fullchain.pem
 ```
 
 2. Copy the privkey.pem file:
 
 ```bash
-cp [path-to-file]/privkey.pem nginx/ssl/
+cp /registry/cert/yourdomain.com.key nginx/ssl/privkey.pem
 ```
 
 3. Go to the auth directory:
@@ -208,54 +264,43 @@ cd auth
 
 4. request a new password file named registry.passwd for the user:
 
+Note: htpasswd binary is inckuded in httpd-tools/apache2-tools package
+
 ```bash
 htpasswd -Bc registry.passwd [username]
 ```
 
 5. Type in a strong password and re-type it to confirm. The output confirms the success of the operation.
 Requesting a password for a user with htpasswd.
-Step 6: Add Root CA Certificate
 
+### Step 6: Add Root CA Certificate to the system store (if it's self signed)
+
+1. Copy the ca certifiacate over to the store and run the system utility to include the CA in the OS CA bundle
+```
+cp /path/to/cert/ca.crt /etc/pki/ca-trust/source/anchors/ # ( or cp /path/to/cert/ca.crt /usr/share/ca-certificates/extra/ )
+update-ca-trust # ( or dpkg-reconfigure ca-certificates for debian based )
+```
+
+2. Verify if the previous steps have made the CA trusted
+```
+openssl verify -CAfile /etc/ssl/certs/ca-bundle.crt /path/to/cert/ca.crt
+```
+If the output is anything different from OK then further troubleshooting should ensue or steps should be repeated.
+
+### Step 7: Add certificate to docker (Optional)
 Add the Root CA certificate to Docker and the host system by following the procedure below:
 
-1. Export the .crt file with OpenSSL by typing:
-
+1. Create a directory for Docker certificates:
 ```bash
-openssl x509 -in rootCA.pem -inform PEM -out rootCA.crt
+mkdir -p /etc/docker/certs.d/[domain]
 ```
 
-2. Create a directory for Docker certificates:
-
+2. Copy the Root certificate into the directory:
 ```bash
-mkdir -p /etc/docker/certs.d/registry.[domain]/
+cp /path/to/cert/ca.crt /etc/docker/certs.d/[domain]
 ```
 
-3. Copy the Root certificate into the directory:
-
-```bash
-cp rootCA.crt /etc/docker/certs.d/registry.[domain]/
-```
-
-4. Create a new directory named extra in the /usr/share/ca-certificates directory:
-
-```bash
-mkdir -p /usr/share/ca-certificates/extra/
-```
-
-5. Copy the same Root certificate into the extra directory:
-
-```bash
-cp rootCA.crt /usr/share/ca-certificates/extra/
-```
-
-6. Reconfigure the newly created ca-certificate package by typing:
-
-```bash
-dpkg-reconfigure ca-certificates
-```
-
-7. Restart the Docker service to apply the changes:
-
+3. Restart the Docker service to apply the changes:
 ```bash
 systemctl restart docker
 ```

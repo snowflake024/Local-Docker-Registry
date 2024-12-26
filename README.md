@@ -1,14 +1,8 @@
 ```bash
-Introduction
-
-Private Docker registries are a practical way of distributing resources and sharing Docker images between containers. Setting up a private registry speeds delivery and ensures smooth CI/CD development using the Docker platform.
-
-In this tutorial, learn how to set up and configure a private Docker registry for external accessibility.
 How to set up private Docker registry on Ubuntu.
 
 Prerequisites
 
-    A system running Ubuntu.
     Command-line access.
     Administrative privileges on the system.
     Docker and Docker Compose installed.
@@ -16,17 +10,9 @@ Prerequisites
 
 What Is Private Docker Registry
 
-A private Docker registry is a container registry instance installed on a private server and available only to authorized users. It stores images in a centralized location and makes them available to all authenticated Docker hosts.
-
-When set up on a server, a private Docker registry communicates with Docker Hub over the internet. The server pulls and pushes images, stores them locally, and shares them with authorized Docker hosts. The hosts can access the local repository over a secure connection and copy images from the local registry to build containers.
-Private vs. Public Docker Registries
-
-Public and private Docker registries have the same underlying technology but different use cases.
-
-Public registries host container images that anyone can download and use. Their open-access nature makes them a good place for developers to share their open-source projects and gain wider exposure. The most popular public Docker registry is Docker Hub, which hosts over five million publicly available images.
-
 Private registries contain proprietary or otherwise sensitive container images not intended for public distribution. By requiring authentication, these registries restrict who can pull and push images, creating a more secure development environment. By running locally, private registries also speed up app development and save bandwidth.
-Install and Configure Private Docker Registry
+
+#Install and Configure Private Docker Registry
 
 Setting up a server to host a private Docker registry requires running a registry service, configuring an Nginx web server, and generating the necessary security certificates. Follow the steps below to install a private Docker registry on a server.
 Step 1: Create Registry Directories

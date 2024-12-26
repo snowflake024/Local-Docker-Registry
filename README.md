@@ -18,7 +18,7 @@ mkdir -p /registry/{nginx,auth}
 2. Create two new directories, conf.d and ssl, inside the nginx directory:
 
 ```bash
-mkdir -p registry/nginx/{conf.d,ssl}
+mkdir -p /registry/nginx/{conf.d,ssl}
 ```
 
 3. Go to the registry directory and inspect the directory hierarchy by using the tree command:
@@ -181,18 +181,18 @@ client_max_body_size 2G;
    
 ### Step 4: Configure/Generate SSL Certificate and Basic Authentication
 
-Note: You can have a self-signed certificate for the registry or have a CA sign a valid public certificate.
+Note: You can have a self-signed certificate for the registry or have a public trusted CA sign a CSR request for a valid certificate.
 
 #### Generate a Certificate Authority Certificate
 
 In a production environment, you should obtain a certificate from a CA. In a test or development environment, you can generate your own CA. To generate a CA certficate, run the following commands.
 
-Generate a CA certificate private key.
+1. Generate a CA certificate private key.
 ```
 openssl genrsa -out ca.key 4096
 ```
 
-Generate the CA certificate. Adapt the values in the -subj option to reflect your organization. If you use an FQDN to connect your local registry, you must specify it as the common name (CN) attribute.
+2. Generate the CA certificate. Adapt the values in the -subj option to reflect your organization. If you use an FQDN to connect your local registry, you must specify it as the common name (CN) attribute.
 ```
 openssl req -x509 -new -nodes -sha512 -days 3650 \
     -subj "/C=CN/ST=Beijing/L=Beijing/O=example/OU=Personal/CN=MyPersonal Root CA" \
@@ -200,14 +200,14 @@ openssl req -x509 -new -nodes -sha512 -days 3650 \
     -out ca.crt
 ```
 
-Generate a Server Certificate. The certificate usually contains a .crt file and a .key file, for example, yourdomain.com.crt and yourdomain.com.key.
+#### Generate a Server Certificate. The certificate usually contains a .crt file and a .key file, for example, yourdomain.com.crt and yourdomain.com.key.
 
-Generate a private key.
+1. Generate a private key.
 ```
 openssl genrsa -out yourdomain.com.key 4096
 ```
 
-Generate a certificate signing request (CSR). Adapt the values in the -subj option to reflect your organization. If you use an FQDN to connect your local registry host, you must specify it as the common name (CN) attribute and use it in the key and CSR filenames.
+2. Generate a certificate signing request (CSR). Adapt the values in the -subj option to reflect your organization. If you use an FQDN to connect your local registry host, you must specify it as the common name (CN) attribute and use it in the key and CSR filenames.
 ```
 openssl req -sha512 -new \
     -subj "/C=CN/ST=Beijing/L=Beijing/O=example/OU=Personal/CN=yourdomain.com" \
@@ -215,7 +215,7 @@ openssl req -sha512 -new \
     -out yourdomain.com.csr
 ```
     
-Generate an x509 v3 extension file. Regardless of whether you’re using either an FQDN or an IP address to connect to your local registry host, you must create this file so that you can generate a certificate for your Harbor host that complies with the Subject Alternative Name (SAN) and x509 v3 extension requirements. Replace the DNS entries to reflect your domain.
+3. Generate an x509 v3 extension file. Regardless of whether you’re using either an FQDN or an IP address to connect to your local registry host, you must create this file so that you can generate a certificate for your Harbor host that complies with the Subject Alternative Name (SAN) and x509 v3 extension requirements. Replace the DNS entries to reflect your domain.
 ```
 cat > v3.ext <<-EOF
 authorityKeyIdentifier=keyid,issuer
@@ -231,7 +231,7 @@ DNS.3=hostname
 EOF
 ```
 
-Use the v3.ext file to generate a certificate for your local registry host.
+4. Use the v3.ext file to generate a certificate for your local registry host.
 
 Replace the yourdomain.com in the CSR and CRT file names with the local registry host name.
 ```
@@ -242,7 +242,7 @@ openssl x509 -req -sha512 -days 3650 \
     -out yourdomain.com.crt
 ```
 
-Proceed with the below steps to copy the domain's SSL certificates to the ssl directory in the project:
+#### Proceed with the below steps to copy the domain's SSL certificates to the ssl directory in the project:
 
 1. Use the cp command to copy the fullchain.pem file:
 
@@ -323,8 +323,9 @@ Starting the Docker registry with Docker Compose.
 docker compose ps
 ```
 
-The output should show the services and their assigned ports.
-How to Push Docker Image to Private Registry
+The output should show the services and their assigned ports. 
+
+#### Test if the local registry functions properly
 
 1. To push an image from a Docker host to the private Docker registry server, log in to the registry with the following command:
 
@@ -353,4 +354,31 @@ docker push [domain]/[new-image-name]
 
 ```bash
 docker images
+```
+
+## Using the local docker registry with k8s clusters
+
+Note: To use this registry with kubernetes, the ca certificate should be trusted by all cluster members, this can be done with a configMap or manually following step 5 (if the certificate is self-signed)
+Note: The scenario below is tested only for containerd with CRI plugin, it should work with other container engines as well, at least on paper.
+
+1. Create a kubernetes secret with the local registry login credentials that we created earlier with htpasswd
+```
+kubectl create secret docker-registry reg-credentials   --docker-server=ctreg.big-brain.local   --docker-username=user   --docker-password=password   --docker-email=example@example.example
+```
+
+After the secret has been created, it needs to be explicity specified in all kinds of API objects that interact with the local docker registry.
+
+2. Test the local docker registry functionality with the kubernetes cluster
+
+```
+	kubectl run nginx-pod --image=[domain]/nginx:latest   --restart=Never   --overrides='
+    {
+      "spec": {
+        "imagePullSecrets": [
+          {
+            "name": "reg-credentials"
+          }
+        ]
+      }
+    }'
 ```
